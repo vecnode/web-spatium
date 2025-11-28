@@ -11,23 +11,30 @@
     <div class="container">
         <header>
             web-spatium
-            <p class="subtitle">FastAPI Backend</p>
         </header>
         
         <main>
             <div class="card">
-                <h2>API Status</h2>
-                <div id="status" class="status-loading">Checking...</div>
+                API Status
+                <div id="status" class="status-loading">Checking</div>
             </div>
             
             <div class="card">
-                <h2>Test API</h2>
+                Test API
                 <button id="testBtn" class="btn">Call Hello API</button>
                 <div id="response" class="response"></div>
             </div>
+
+            <div class="card">
+                <button id="camera1Btn" class="btn" onclick="setCamera1()">Camera 1</button>
+            </div>
+
+            <canvas id="canvas"></canvas>
+
+            
             
             <div class="card">
-                <h2>Audio</h2>
+                Audio
                 <button id="playAudioBtn" class="btn" onclick="playAudio()">Play Audio</button>
                 <div style="margin-top: 20px;">
                     <canvas id="spatialCanvas" width="200" height="200" style="border: 2px solid #e2e8f0; border-radius: 8px; cursor: pointer;"></canvas>
@@ -35,12 +42,9 @@
             </div>
         </main>
         
-        <footer>
-            <p>Powered by FastAPI</p>
-        </footer>
+
     </div>
 
-    <canvas id="canvas"></canvas>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>

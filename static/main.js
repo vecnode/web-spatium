@@ -11,8 +11,8 @@ if (typeof THREE !== 'undefined') {
     /*--------------------
     Canvas Dimensions
     --------------------*/
-    const CANVAS_WIDTH = window.innerWidth / 2
-    const CANVAS_HEIGHT = window.innerHeight / 2
+    const CANVAS_WIDTH = 720
+    const CANVAS_HEIGHT = 512
     
     /*--------------------
     Renderer
@@ -31,7 +31,7 @@ if (typeof THREE !== 'undefined') {
     camera.position.z = 5
     const scene = new THREE.Scene()
     scene.background = new THREE.Color( 0xe0e0e0 )
-    scene.fog = new THREE.Fog( 0xe0e0e0, 1, 15 )
+    // Fog removed for better visibility
     
     
     /*--------------------
@@ -45,14 +45,14 @@ if (typeof THREE !== 'undefined') {
     /*--------------------
     Light
     --------------------*/
-    const ambientLight = new THREE.AmbientLight(0xffffff, .5)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8)
     scene.add(ambientLight)
     
-    const light2 = new THREE.PointLight(0xffffff, .5)
+    const light2 = new THREE.PointLight(0xffffff, 1.0)
     light2.position.set(0, 1, 0)
     scene.add(light2)
     
-    const light = new THREE.PointLight(0xffffff, .1)
+    const light = new THREE.PointLight(0xffffff, 0.8)
     light.position.set(0, 2, 0)
     scene.add(light)
     light.castShadow = true
@@ -66,49 +66,188 @@ if (typeof THREE !== 'undefined') {
     
     
     /*--------------------
+    Pendulum Class
+    --------------------*/
+    class Pendulum {
+        constructor(scene, matcapTexture, options = {}) {
+            // Default options
+            this.scene = scene;
+            this.matcap = matcapTexture;
+            this.ballRadius = options.ballRadius || 0.3;
+            this.ballSegments = options.ballSegments || 32;
+            this.lineRadius = options.lineRadius || 0.01;
+            this.lineLength = options.lineLength || 8;
+            this.lineSegments = options.lineSegments || 32;
+            this.lineColor = options.lineColor || 0xcccccc;
+            this.ballY = options.ballY || -6;
+            this.lineY = options.lineY || -2;
+            this.boxSize = options.boxSize || 0.5;
+            
+            // Create geometries and materials
+            this.ballGeo = new THREE.SphereBufferGeometry(
+                this.ballRadius, 
+                this.ballSegments, 
+                this.ballSegments
+            );
+            this.ballMat = new THREE.MeshMatcapMaterial({ 
+                matcap: this.matcap
+            });
+            
+            this.lineGeo = new THREE.CylinderBufferGeometry(
+                this.lineRadius, 
+                this.lineRadius, 
+                this.lineLength, 
+                this.lineSegments
+            );
+            this.lineMat = new THREE.MeshPhongMaterial({ 
+                color: this.lineColor
+            });
+            
+            // Create group
+            this.group = new THREE.Group();
+            
+            // Create ball mesh
+            this.ball = new THREE.Mesh(this.ballGeo, this.ballMat);
+            this.ball.position.y = this.ballY;
+            this.ball.castShadow = true;
+            this.ball.receiveShadow = true;
+            this.group.add(this.ball);
+            
+            // Create line/chain mesh
+            this.line = new THREE.Mesh(this.lineGeo, this.lineMat);
+            this.line.position.y = this.lineY;
+            this.group.add(this.line);
+            
+            // Create wireframe box at the top of the pendulum
+            // Top of line is at lineY + (lineLength/2) = -2 + 4 = 2 relative to group
+            const boxGeo = new THREE.BoxGeometry(this.boxSize, this.boxSize, this.boxSize);
+            const boxEdges = new THREE.EdgesGeometry(boxGeo);
+            const boxMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
+            this.topBox = new THREE.LineSegments(boxEdges, boxMaterial);
+            // Position at top of line: lineY + lineLength/2 = -2 + 4 = 2
+            this.topBox.position.y = this.lineY + (this.lineLength / 2);
+            this.group.add(this.topBox);
+            
+            // GSAP animation timeline (can be controlled)
+            this.animationTimeline = null;
+            
+            // Add to scene
+            this.scene.add(this.group);
+        }
+        
+        /**
+         * Set the position of the pendulum
+         * @param {number} x - X position
+         * @param {number} y - Y position
+         * @param {number} z - Z position
+         */
+        setPosition(x, y, z) {
+            this.group.position.set(x, y, z);
+        }
+        
+        /**
+         * Set the rotation of the pendulum
+         * @param {number} x - X rotation
+         * @param {number} y - Y rotation
+         * @param {number} z - Z rotation
+         */
+        setRotation(x, y, z) {
+            this.group.rotation.set(x, y, z);
+        }
+        
+        /**
+         * Start the pendulum swing animation
+         * @param {Object} options - Animation options
+         * @param {number} options.from - Starting rotation angle (default: -0.3)
+         * @param {number} options.to - Ending rotation angle (default: 0.3)
+         * @param {number} options.duration - Animation duration in seconds (default: 1.5)
+         * @param {string} options.ease - GSAP easing function (default: 'power1.inOut')
+         * @param {number} options.delay - Delay before starting animation (default: 0)
+         * @param {boolean} options.repeat - Whether to repeat (default: true)
+         */
+        startAnimation(options = {}) {
+            // Stop existing animation if any
+            this.stopAnimation();
+            
+            const from = options.from !== undefined ? options.from : -0.3;
+            const to = options.to !== undefined ? options.to : 0.3;
+            const duration = options.duration !== undefined ? options.duration : 1.5;
+            const ease = options.ease || 'power1.inOut';
+            const delay = options.delay !== undefined ? options.delay : 0;
+            const repeat = options.repeat !== undefined ? options.repeat : -1;
+            
+            this.animationTimeline = gsap.fromTo(this.group.rotation, {
+                x: from,
+            }, {
+                duration: duration,
+                x: to,
+                repeat: repeat,
+                ease: ease,
+                yoyo: true,
+                delay: delay
+            });
+        }
+        
+        /**
+         * Stop the pendulum animation
+         */
+        stopAnimation() {
+            if (this.animationTimeline) {
+                this.animationTimeline.kill();
+                this.animationTimeline = null;
+            }
+        }
+        
+        /**
+         * Remove the pendulum from the scene
+         */
+        dispose() {
+            this.stopAnimation();
+            this.scene.remove(this.group);
+            
+            // Dispose geometries and materials
+            this.ballGeo.dispose();
+            this.ballMat.dispose();
+            this.lineGeo.dispose();
+            this.lineMat.dispose();
+        }
+        
+        /**
+         * Get the group object (for direct Three.js manipulation)
+         * @returns {THREE.Group}
+         */
+        getGroup() {
+            return this.group;
+        }
+        
+        /**
+         * Get the ball mesh
+         * @returns {THREE.Mesh}
+         */
+        getBall() {
+            return this.ball;
+        }
+        
+        /**
+         * Get the line/chain mesh
+         * @returns {THREE.Mesh}
+         */
+        getLine() {
+            return this.line;
+        }
+    }
+    
+    /*--------------------
     Init
     --------------------*/
     const meshes = []
     const matcap = new THREE.TextureLoader().load('https://raw.githubusercontent.com/nidorx/matcaps/master/1024/5C4E41_CCCDD6_9B979B_B1AFB0.png')
     const init = () => {
-        const ballGeo = new THREE.SphereBufferGeometry(.3, 32, 32)
-        const ballMat = new THREE.MeshMatcapMaterial( { 
-        matcap: matcap
-        })
-        const hairGeo = new THREE.CylinderBufferGeometry(.006, .006, 8,  32)
-        const hairMat = new THREE.MeshPhongMaterial( { 
-        color: 0xcccccc
-        })
-    
-        for (let i = 0; i < 10; i++) {
-        const group = new THREE.Group()
-        scene.add(group)
-        
-        const ball = new THREE.Mesh( ballGeo, ballMat )
-        ball.position.y = -6
-        ball.castShadow = true
-        ball.receiveShadow = true
-        group.add( ball )
-        
-        const hair = new THREE.Mesh( hairGeo, hairMat )
-        hair.position.y = -2
-        group.add( hair )
-        
-        group.position.x = -3. + i * .7
-        group.position.y = 6
-        
-        gsap.fromTo(group.rotation, {
-            x: -.3,
-        }, {
-            duration: 1.5,
-            x: .3,
-            repeat: -1,
-            ease: 'power1.inOut',
-            yoyo: true,
-            delay: i * 0.1
-        }) 
-        meshes.push(group)
-        }
+        // Create a single pendulum at the center
+        const pendulum = new Pendulum(scene, matcap);
+        pendulum.setPosition(0, 6, 0);
+        pendulum.startAnimation();
+        meshes.push(pendulum);
         
         const geoPlane = new THREE.PlaneBufferGeometry(100, 100)
         const mat3 = new THREE.MeshPhongMaterial( { 
@@ -137,7 +276,6 @@ if (typeof THREE !== 'undefined') {
         requestAnimationFrame( render )
         renderer.render( scene, camera )
         controls.update()
-        scene.rotation.y += .005
     }
     render()
     
@@ -153,6 +291,22 @@ if (typeof THREE !== 'undefined') {
         renderer.setSize( CANVAS_WIDTH, CANVAS_HEIGHT )
     }
     window.addEventListener('resize', resize)
+    
+    /*--------------------
+    Camera Controls
+    --------------------*/
+    // Function to set camera to front view (facing along x-axis)
+    function setCamera1() {
+        // Position camera on the positive x-axis, looking at origin
+        camera.position.set(5, 0, 0);
+        camera.lookAt(0, 0, 0);
+        // Update controls target to origin
+        controls.target.set(0, 0, 0);
+        controls.update();
+    }
+    
+    // Make function globally available
+    window.setCamera1 = setCamera1;
 }
 
 // =======================================
